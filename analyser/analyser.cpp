@@ -1,5 +1,4 @@
 #include "analyser.h"
-
 #include <climits>
 
 namespace miniplc0 {
@@ -40,14 +39,14 @@ std::optional<CompilationError> Analyser::analyseMain() {
   // 完全可以参照 <程序> 编写
 
   // <常量声明>
-  auto err = analyseConstantDeclaration();
-  if (err.has_value()) return err;
+  auto ct = analyseConstantDeclaration();
+  if (ct.has_value()) return ct;
   // <变量声明>
-  err = analyseVariableDeclaration();
-  if (err.has_value()) return err;
+  auto vt = analyseVariableDeclaration();
+  if (vt.has_value()) return vt;
   // <语句序列>
-  err = analyseStatementSequence();
-  if (err.has_value()) return err;
+  auto s = analyseStatementSequence();
+  if (s.has_value()) return s;
   return {};
 }
 

@@ -2,7 +2,6 @@
 
 #include <cctype>
 #include <sstream>
-#include <string>
 
 namespace miniplc0 {
 
@@ -158,35 +157,31 @@ Tokenizer::nextToken() {
         //     解析成功则返回无符号整数类型的token，否则返回编译错误
         auto str = ss.str();
         auto t = true;
-        for (int i = 0; i < str.length(); i++)  if (!isdigit(str[i])) t = false;
-        if (!current_char.has_value()) {
-          if (t) {
+        for (int i = 0; i < str.length(); i++)
+          if (!isdigit(str[i])) t = false;
+        if (current_char.has_value() && isdigit(current_char.value()))
+          ss << current_char.value();
+        else if (current_char.has_value() && !isdigit(current_char.value())) {
+          unreadLast();
+          if (t)
             return std::make_pair(
                 std::make_optional<Token>(TokenType::UNSIGNED_INTEGER, ss.str(),
                                           pos, currentPos()),
                 std::nullopt);
-          } else {
+          else
             return std::make_pair(std::optional<Token>(),
                                   std::make_optional<CompilationError>(
                                       pos, ErrorCode::ErrInvalidInput));
-          }
         } else {
-          auto ch = current_char.value();
-          if (isdigit(ch)) {
-            ss << ch;
-          } else {
-            unreadLast();
-            if (t) {
-              return std::make_pair(
-                  std::make_optional<Token>(TokenType::UNSIGNED_INTEGER,
-                                            ss.str(), pos, currentPos()),
-                  std::nullopt);
-            } else {
-              return std::make_pair(std::optional<Token>(),
-                                    std::make_optional<CompilationError>(
-                                        pos, ErrorCode::ErrInvalidInput));
-            }
-          }
+          if (t)
+            return std::make_pair(
+                std::make_optional<Token>(TokenType::UNSIGNED_INTEGER, ss.str(),
+                                          pos, currentPos()),
+                std::nullopt);
+          else
+            return std::make_pair(std::optional<Token>(),
+                                  std::make_optional<CompilationError>(
+                                      pos, ErrorCode::ErrInvalidInput));
         }
         break;
       }
