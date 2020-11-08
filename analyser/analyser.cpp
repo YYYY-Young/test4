@@ -368,6 +368,9 @@ std::optional<CompilationError> Analyser::analyseFactor() {
   if (!next.has_value())
     return std::make_optional<CompilationError>(
         _current_pos, ErrorCode::ErrIncompleteExpression);
+  std::string ident;
+  int32_t val;
+  std::optional<CompilationError> err;
   switch (next.value().GetType()) {
     // 这里和 <语句序列> 类似，需要根据预读结果调用不同的子程序
     // 但是要注意 default 返回的是一个编译错误
@@ -386,6 +389,24 @@ std::optional<CompilationError> Analyser::analyseFactor() {
     // - 加载常数
     // int32_t val = /* 值 */;
     // _instructions.emplace_back(Operation::LIT, val);
+    case TokenType::IDENTIFIER: {
+      ident = next.value().GetValueString();
+      if (!isDeclared(ident))
+        return {CompilationError(_current_pos, ErrorCode::ErrNotDeclared)};
+      if (!isInitializedVariable(ident) && !isConstant(ident))
+        return {CompilationError(_current_pos, ErrorCode::ErrNotInitialized)};
+      _instructions.emplace_back(Operation::LOD, getIndex(ident));
+    } break;
+    case TokenType::UNSIGNED_INTEGER:
+
+      val = atoi(next.value().GetValueString().c_str());
+      _instructions.emplace_back(Operation::LIT, val);
+      break;
+      case TokenType::LEFT_BRACKET:
+      err = analyseExpression();
+      if (err.has_value()) return err;
+      next = nextToken();
+      if (!next.has_value() ||next.value().GetType() != TokenType::RIGHT_BRACKET)return std::make_optional<CompilationError>( _current_pos, ErrorCode::ErrIncompleteExpression);break;
     default:
       return std::make_optional<CompilationError>(
           _current_pos, ErrorCode::ErrIncompleteExpression);
