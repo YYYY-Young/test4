@@ -160,6 +160,7 @@ Tokenizer::nextToken() {
         for (int i = 0; i < str.length(); i++)  if (!isdigit(str[i])) t = false;
         if (current_char.has_value() && isdigit(current_char.value()))   ss << current_char.value();
         else if (current_char.has_value() && !isdigit(current_char.value())) {
+          unreadLast();
           if (t)
             return std::make_pair(
                     std::make_optional<Token>(
@@ -176,7 +177,6 @@ Tokenizer::nextToken() {
                     ErrorCode::ErrInvalidInput));
         } 
         else {
-          unreadLast();
           if (t)
             return std::make_pair(
                 std::make_optional<Token>(TokenType::UNSIGNED_INTEGER, ss.str(),
