@@ -120,33 +120,26 @@ std::optional<CompilationError> Analyser::analyseVariableDeclaration() {
     next = nextToken();
     // 变量可能没有初始化，仍然需要一次预读
     bool initialized = /*填写*/ false;
-    if (!next.has_value() || next.value().GetType() != TokenType::IDENTIFIER)
-      return std::make_optional<CompilationError>(_current_pos,
-                                                  ErrorCode::ErrNeedIdentifier);
-    if (isDeclared(next.value().GetValueString()))
-      return std::make_optional<CompilationError>(
-          _current_pos, ErrorCode::ErrDuplicateDeclaration);
+    if (!next.has_value() || next.value().GetType() != TokenType::IDENTIFIER)return std::make_optional<CompilationError>(_current_pos,  ErrorCode::ErrNeedIdentifier);
+    if (isDeclared(next.value().GetValueString())) return std::make_optional<CompilationError>( _current_pos, ErrorCode::ErrDuplicateDeclaration);
     ident = next.value();
     // '='
     next = nextToken();
-    if (next.has_value() && next.value().GetType() == TokenType::EQUAL_SIGN) {
+    if (next.value().GetType() == TokenType::EQUAL_SIGN && next.has_value()) {
       // '<表达式>'
       initialized = true;
-      auto err = analyseExpression();
-      if (err.has_value()) return err;
-    } else {
-      unreadToken();
-    }
+      auto cd = analyseExpression();
+      if (cd.has_value()) return cd;
+    } 
+    else unreadToken();
+    
     // ';'
     next = nextToken();
     if (!next.has_value() || next.value().GetType() != TokenType::SEMICOLON)
-      return std::make_optional<CompilationError>(_current_pos,
-                                                  ErrorCode::ErrNoSemicolon);
+      return std::make_optional<CompilationError>(_current_pos, ErrorCode::ErrNoSemicolon);
     // 把变量加入符号表
-    if (initialized) {
-      addVariable(ident);
-      // 已经初始化的变量的值的位置正好是之前表达式计算结果，所以不做处理
-    } else {
+    if (initialized) addVariable(ident);
+     else {
       addUninitializedVariable(ident);
       // 加载一个任意的初始值
       _instructions.emplace_back(Operation::LIT, 0);
@@ -167,8 +160,8 @@ std::optional<CompilationError> Analyser::analyseStatementSequence() {
     auto next = nextToken();
     if (!next.has_value()) return {};
     unreadToken();
-    if (next.value().GetType() != TokenType::IDENTIFIER &&
-        next.value().GetType() != TokenType::PRINT &&
+    if (next.value().GetType() != TokenType::PRINT &&
+        next.value().GetType() != TokenType::IDENTIFIER &&
         next.value().GetType() != TokenType::SEMICOLON) {
       return {};
     }
@@ -209,13 +202,9 @@ std::optional<CompilationError> Analyser::analyseConstantExpression(
   out = 1;
   auto next = nextToken();
   if (!next.has_value())
-    return std::make_optional<CompilationError>(
-        _current_pos, ErrorCode::ErrIncompleteExpression);
-  if (next.value().GetType() == TokenType::PLUS_SIGN ||
-      next.value().GetType() == TokenType::MINUS_SIGN) {
-    if (next.value().GetType() == TokenType::MINUS_SIGN) {
-      out = -1;
-    }
+    return std::make_optional<CompilationError>(_current_pos, ErrorCode::ErrIncompleteExpression);
+  if (next.value().GetType() == TokenType::PLUS_SIGN ||next.value().GetType() == TokenType::MINUS_SIGN) {
+    if (next.value().GetType() == TokenType::MINUS_SIGN) out = -1;
     next = nextToken();
   }
   if (next.value().GetType() == TokenType::UNSIGNED_INTEGER) {
@@ -225,8 +214,7 @@ std::optional<CompilationError> Analyser::analyseConstantExpression(
       out = out * std::stoi(next.value().GetValueString());
       // std::cout << out << std::endl;
     } catch (std::out_of_range &e) {
-      return std::make_optional<CompilationError>(
-          _current_pos, ErrorCode::ErrIntegerOverflow);
+      return std::make_optional<CompilationError>(_current_pos, ErrorCode::ErrIntegerOverflow);
     }
   }
   return {};
@@ -235,8 +223,8 @@ std::optional<CompilationError> Analyser::analyseConstantExpression(
 // <表达式> ::= <项>{<加法型运算符><项>}
 std::optional<CompilationError> Analyser::analyseExpression() {
   // <项>
-  auto err = analyseItem();
-  if (err.has_value()) return err;
+  auto item = analyseItem();
+  if (item.has_value()) return item;
 
   // {<加法型运算符><项>}
   while (true) {
@@ -250,8 +238,8 @@ std::optional<CompilationError> Analyser::analyseExpression() {
     }
 
     // <项>
-    err = analyseItem();
-    if (err.has_value()) return err;
+    item = analyseItem();
+    if (item.has_value()) return item;
 
     // 根据结果生成指令
     if (type == TokenType::PLUS_SIGN)
@@ -273,34 +261,26 @@ std::optional<CompilationError> Analyser::analyseAssignmentStatement() {
   auto ident =
       /*标识符的 token*/ Token(TokenType::NULL_TOKEN, nullptr, 0, 0, 0, 0);
   auto next = nextToken();
-  if (!next.has_value() || next.value().GetType() != TokenType::IDENTIFIER)
-    return std::make_optional<CompilationError>(_current_pos,
-                                                ErrorCode::ErrNeedIdentifier);
+  if (!next.has_value() || next.value().GetType() != TokenType::IDENTIFIER) return std::make_optional<CompilationError>(_current_pos,ErrorCode::ErrNeedIdentifier);
   ident = next.value();
   auto name = ident.GetValueString();
   // 未定义
-  if (!isDeclared(name)) {
-    return {CompilationError(_current_pos, ErrorCode::ErrNotDeclared)};
-  }
+  if (!isDeclared(name))  return {CompilationError(_current_pos, ErrorCode::ErrNotDeclared)};
+  
   // 是常量
-  if (isConstant(name)) {
-    return {CompilationError(_current_pos, ErrorCode::ErrAssignToConstant)};
-  }
+  if (isConstant(name))  return {CompilationError(_current_pos, ErrorCode::ErrAssignToConstant)};
+  
   // 存储这个标识符
   auto index = getIndex(name);
   // '='
   next = nextToken();
-  if (!next.has_value() || next.value().GetType() != TokenType::EQUAL_SIGN)
-    return std::make_optional<CompilationError>(
-        _current_pos, ErrorCode::ErrConstantNeedValue);
+  if (!next.has_value() || next.value().GetType() != TokenType::EQUAL_SIGN)return std::make_optional<CompilationError>(_current_pos, ErrorCode::ErrConstantNeedValue);
   //<表达式>
-  auto err = analyseExpression();
-  if (err.has_value()) return err;
+  auto s = analyseExpression();
+  if (s.has_value()) return s;
   //；
   next = nextToken();
-  if (!next.has_value() || next.value().GetType() != TokenType::SEMICOLON)
-    return std::make_optional<CompilationError>(_current_pos,
-                                                ErrorCode::ErrNoSemicolon);
+  if (!next.has_value() || next.value().GetType() != TokenType::SEMICOLON)return std::make_optional<CompilationError>(_current_pos, ErrorCode::ErrNoSemicolon);
   if (!isInitializedVariable(name)) makeInitialized(name);
   _instructions.emplace_back(Operation::STO, index);
   return {};
@@ -344,29 +324,25 @@ std::optional<CompilationError> Analyser::analyseItem() {
   // 可以参考 <表达式> 实现
 
   // <因子>
-  auto err = analyseFactor();
-  if (err.has_value()) return err;
+  auto it = analyseFactor();
+  if (it.has_value()) return it;
   // { <乘法型运算符><因子> }
   while (true) {
     // 预读
     auto type = TokenType::NULL_TOKEN;
     auto next = nextToken();
-    if (!next.has_value()) {
-      break;
-    } else if (next.value().GetType() != TokenType::MULTIPLICATION_SIGN &&
-               next.value().GetType() != TokenType::DIVISION_SIGN) {
-      unreadToken();
-      break;
+    if (!next.has_value()) break;
+    else if (next.value().GetType() != TokenType::MULTIPLICATION_SIGN && next.value().GetType() != TokenType::DIVISION_SIGN) {
+    unreadToken();
+    break;
     }
     type = next.value().GetType();
     // <因子>
     auto err = analyseFactor();
     if (err.has_value()) return err;
     // 根据结果生成指令
-    if (type == TokenType::MULTIPLICATION_SIGN)
-      _instructions.emplace_back(Operation::MUL, 0);
-    else if (type == TokenType::DIVISION_SIGN)
-      _instructions.emplace_back(Operation::DIV, 0);
+    if (type == TokenType::MULTIPLICATION_SIGN) _instructions.emplace_back(Operation::MUL, 0);
+    else if (type == TokenType::DIVISION_SIGN) _instructions.emplace_back(Operation::DIV, 0);
   }
   return {};
 }
@@ -377,21 +353,16 @@ std::optional<CompilationError> Analyser::analyseFactor() {
   // [<符号>]
   auto next = nextToken();
   auto prefix = 1;
-  if (!next.has_value())
-    return std::make_optional<CompilationError>(
-        _current_pos, ErrorCode::ErrIncompleteExpression);
-  if (next.value().GetType() == TokenType::PLUS_SIGN)
-    prefix = 1;
+  if (!next.has_value())return std::make_optional<CompilationError>( _current_pos, ErrorCode::ErrIncompleteExpression);
+  if (next.value().GetType() == TokenType::PLUS_SIGN)prefix = 1;
   else if (next.value().GetType() == TokenType::MINUS_SIGN) {
     prefix = -1;
     _instructions.emplace_back(Operation::LIT, 0);
-  } else
-    unreadToken();
+  } 
+  else unreadToken();
   // 预读
   next = nextToken();
-  if (!next.has_value())
-    return std::make_optional<CompilationError>(
-        _current_pos, ErrorCode::ErrIncompleteExpression);
+  if (!next.has_value())return std::make_optional<CompilationError>( _current_pos, ErrorCode::ErrIncompleteExpression);
   switch (next.value().GetType()) {
     // 这里和 <语句序列> 类似，需要根据预读结果调用不同的子程序
     // 但是要注意 default 返回的是一个编译错误
@@ -425,21 +396,19 @@ std::optional<CompilationError> Analyser::analyseFactor() {
       try {
         int32_t val = std::stoi(next.value().GetValueString());
         _instructions.emplace_back(Operation::LIT, val);
-      } catch (std::out_of_range &e) {
+      } 
+      catch (std::out_of_range &e) {
         return std::make_optional<CompilationError>(
             _current_pos, ErrorCode::ErrIntegerOverflow);
-      }
-      break;
+      }break;
     }
     case TokenType::LEFT_BRACKET: {
       auto err = analyseExpression();
       if (err.has_value()) return err;
       // ')'
       next = nextToken();
-      if (!next.has_value() ||
-          next.value().GetType() != TokenType::RIGHT_BRACKET)
-        return std::make_optional<CompilationError>(_current_pos,
-                                                    ErrorCode::ErrInvalidPrint);
+      if (!next.has_value() ||next.value().GetType() != TokenType::RIGHT_BRACKET)
+        return std::make_optional<CompilationError>(_current_pos, ErrorCode::ErrInvalidPrint);
       break;
     }
     default:
